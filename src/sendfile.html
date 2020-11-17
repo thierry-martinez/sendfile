@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>${title}</title>
+    <style>
+      /*<!--*/
+      body {
+        font-family: sans-serif;
+        margin: 1em auto;
+        max-width: 40em;
+      }
+      header {
+        min-height: 8em;
+      }
+      form {
+        padding: 1.5em 3em;
+        border: solid 2pt #ccc;
+        border-radius: 1em;
+      }
+      .button {
+        text-align: center;
+      }
+      .button input {
+        margin-top: 1em;
+        height: 2em;
+      }
+      #message {
+        position: relative;
+        border: solid 1pt black;
+        padding: 0.5em 1em;
+        background-color: #efe;
+      }
+      .close {
+        position: absolute;
+        top: 0.5em;
+        right: 0.5em;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      #progress {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      #bar {
+        display: block;
+        flex: auto;
+        position: relative;
+        border: solid 1pt black;
+      }
+      #percent-bar {
+        display: block;
+        position: absolute;
+        background: blue;
+        left: 0;
+        top: 0;
+      }
+      #percent {
+        flex: 0 0 4em;
+        text-align: center;
+      }
+      /*-->*/
+    </style>
+    <script>
+      /*<!--*/
+      function copy(id) {
+          document.getElementById(id).select()
+          document.execCommand('copy')
+      }
+      function close_message() {
+          elt = document.getElementById("message")
+          elt.parentNode.removeChild(elt)
+      }
+      function initialize_post_form() {
+          post_form = document.getElementById("post_form")
+          post_form.addEventListener("submit", function (e) {
+              if (e.preventDefault) {
+                  e.preventDefault();
+              }
+              parent = post_form.parentNode;
+              parent.removeChild(post_form);
+              let sending = document.getElementById("sending").content.cloneNode(true);
+              parent.appendChild(sending);
+              let progress_elt = document.getElementById("progress");
+              progress_elt.style.visibility = "hidden";
+              let percent_elt = document.getElementById("percent");
+              let percent_text = null
+              let percent_bar_elt = document.getElementById("percent-bar");
+              function set_percent(percent) {
+                  progress_elt.style.visibility = "inherit";
+                  if (percent_text) {
+                      percent_elt.removeChild(percent_text)
+                  }
+                  percent_text = document.createTextNode(percent + "%");
+                  percent_elt.appendChild(percent_text);
+                  percent_bar_elt.style.width = percent + "%";
+              }
+              let xhr = new window.XMLHttpRequest();
+              xhr.upload.addEventListener("progress", function(e) {
+                  if (e.lengthComputable) {
+                      let completed = Math.round(e.loaded / e.total * 100);
+                      set_percent(completed);
+                  }
+              });
+              xhr.addEventListener("load", function(e) {
+                  location.assign(xhr.responseURL);
+              });
+              function reset_reload() {
+                  parent.querySelector("form").addEventListener("reset", function (e) {
+                      if (e.preventDefault) {
+                          e.preventDefault();
+                      }
+                      location.reload();
+                      return false;
+                  })
+              };
+              reset_reload();
+              xhr.upload.addEventListener("error", function(e) {
+                  parent.removeChild(pending);
+                  let failure = document.getElementById("failure").content.cloneNode(true);
+                  parent.appendChild(failure);
+                  reset_reload();
+              });
+              xhr.open("POST", "");
+              xhr.send(new FormData(post_form));
+              return false;
+          })
+      }
+      /*-->*/
+    </script>
+  </head>
+  <body>
+    <header>
+      ${message}
+    </header>
+    <main>
+      <form id="post_form" enctype="multipart/form-data" method="post" action="">
+        <p id="uuid">
+          <input type="hidden" name="uuid" value="${uuid}" />
+        </p>
+        <p><input type="hidden" name="secret" value="${secret}" /></p>
+        <p><label>Send file: <input name="file" type="file" /></label></p>
+        <label>
+          <p>
+            The file will be available through the URL
+          </p>
+          <p>
+            <input type="text" name="url" id="url0" value="${url}" size="40"
+              readonly="readonly" />
+            <a href="javascript:copy('url0');">📋</a>
+          </p>
+        </label>
+        <p class="button"><input type="submit" value="Send" /></p>
+      </form>
+      <script>
+        /*<!--*/
+        initialize_post_form()
+        /*-->*/
+      </script>
+      <template id="sending">
+        <form action="">
+          <label>
+            <p>
+              The file is available for a single download through the following URL
+              until you close the window.
+            </p>
+            <p>
+              <input type="text" name="url" id="url1" value="${url}" size="40"
+                readonly="readonly" />
+              <a href="javascript:copy('url1');">📋</a>
+            </p>
+          </label>
+          <p id="progress">
+            <span id="bar">
+              <span id="percent-bar"> </span>
+            </span>
+            <span id="percent"></span>
+          </p>
+          <p class="button"><input type="reset" value="Cancel" /></p>
+        </form>
+      </template>
+      <template id="failure">
+        <form action="">
+          <label>
+            <p>
+              The download failed.
+            </p>
+          </label>
+          <p class="button"><input type="reset" value="Try again" /></p>
+        </form>
+      </template>
+    </main>
+  </body>
+</html>

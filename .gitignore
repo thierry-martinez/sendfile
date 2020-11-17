@@ -1,0 +1,7 @@
+config.yml
+*~
+prepare/
+infos/
+socket/
+.mypy_cache/
+__pycache__/
