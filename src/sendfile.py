@@ -238,6 +238,7 @@ def make_request_handler_class(config):
         def handle_get_query(self, parse, parts):
             query = urllib.parse.parse_qs(parse.query)
             try:
+                print(parts)
                 if len(parts) < 3:
                     self.send_response(200)
                     self.send_header("Content-type", "text/html; encoding=utf-8")
@@ -248,8 +249,8 @@ def make_request_handler_class(config):
                     else:
                         message = None
                     self.wfile.write(index(base_url, message).encode("utf-8"))
-                elif len(parts) < 5:
-                    self.receive_file(parts[3])
+                elif len(parts) == 3:
+                    self.receive_file(parts[2])
                 else:
                     raise NotFound()
             except Failure as exc:
