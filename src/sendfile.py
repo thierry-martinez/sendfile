@@ -249,7 +249,7 @@ def make_request_handler_class(config):
                     else:
                         message = None
                     self.wfile.write(index(base_url, message).encode("utf-8"))
-                elif len(parts) == 3:
+                elif len(parts) < 5:
                     self.receive_file(parts[2])
                 else:
                     raise NotFound()
