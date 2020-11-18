@@ -265,7 +265,7 @@ def make_request_handler_class(config):
     base_domain = config["base_domain"]
     base_url = base_domain + base_path
     redirect = config["redirect"]
-    cas = config["cas"]
+    cas = config.get("cas", None)
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             """Respond to a GET request."""
@@ -320,6 +320,8 @@ def make_request_handler_class(config):
             self.wfile.write(string.encode("utf-8"))
 
         def require_ticket(self, ticket, message):
+            if not cas:
+                return True
             service = base_url
             if message:
                 service += build_query(message=message)
