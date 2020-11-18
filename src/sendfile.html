@@ -8,7 +8,7 @@
       body {
         font-family: sans-serif;
         margin: 1em auto;
-        max-width: 40em;
+        max-width: 50em;
       }
       header {
         min-height: 8em;
@@ -150,9 +150,13 @@
             The file will be available through the URL
           </p>
           <p>
-            <input type="text" name="url" id="url0" value="${url}" size="40"
+            <input type="text" name="url" id="url0" value="${url}" size="60"
               readonly="readonly" />
-            <a href="javascript:copy('url0');">📋</a>
+            <script>
+              document.write(`
+                <a href="javascript:copy('url0');" aria-label="Copy to clipboard">📋</a>
+              `)
+            </script>
           </p>
         </label>
         <p class="button"><input type="submit" value="Send" /></p>
@@ -164,38 +168,38 @@
       </script>
       <script>
         document.write(`
-      <template id="sending">
-        <form action="">
-          <label>
-            <p>
-              The file is available for a single download through the following URL
-              until you close the window.
-            </p>
-            <p>
-              <input type="text" name="url" id="url1" value="${url}" size="40"
-                readonly="readonly" />
-              <a href="javascript:copy('url1');">📋</a>
-            </p>
-          </label>
-          <p id="progress">
-            <span id="bar">
-              <span id="percent-bar"> </span>
-            </span>
-            <span id="percent"></span>
-          </p>
-          <p class="button"><input type="reset" value="Cancel" /></p>
-        </form>
-      </template>
-      <template id="failure">
-        <form action="">
-          <label>
-            <p>
-              The download failed.
-            </p>
-          </label>
-          <p class="button"><input type="reset" value="Try again" /></p>
-        </form>
-      </template>`)
+          <template id="sending">
+            <form action="">
+              <label>
+                <p>
+                  The file is available for a single download through the following URL
+                  until you close the window.
+                </p>
+                <p>
+                  <input type="text" name="url" id="url1" value="${url}" size="60"
+                    readonly="readonly" />
+                  <a href="javascript:copy('url1');" aria-label="Copy to clipboard">📋</a>
+                </p>
+              </label>
+              <p id="progress">
+                <span id="bar">
+                  <span id="percent-bar"> </span>
+                </span>
+                <span id="percent"></span>
+              </p>
+              <p class="button"><input type="reset" value="Cancel" /></p>
+            </form>
+          </template>
+          <template id="failure">
+            <form action="">
+              <label>
+                <p>
+                  The download failed.
+                </p>
+              </label>
+              <p class="button"><input type="reset" value="Try again" /></p>
+            </form>
+          </template>`);
       </script>
     </main>
   </body>
