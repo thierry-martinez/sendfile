@@ -79,6 +79,7 @@
               if (e.preventDefault) {
                   e.preventDefault();
               }
+              close_message();
               parent = post_form.parentNode;
               parent.removeChild(post_form);
               let sending = document.getElementById("sending").content.cloneNode(true);
