@@ -9,15 +9,19 @@
       body {
         font-family: sans-serif;
         margin: 1em auto;
-        max-width: 50em;
+        max-width: 45em;
       }
       header {
         min-height: 8em;
       }
-      form {
-        padding: 1.5em 3em;
+      main {
         border: solid 2pt #ccc;
+        padding: 0 0.5em;
         border-radius: 1em;
+      }
+      form {
+        margin: 1.5em auto;
+        max-width: 40em;
       }
       .button {
         text-align: center;
@@ -29,7 +33,7 @@
       #message {
         position: relative;
         border: solid 1pt black;
-        padding: 0.5em 1em;
+        padding: 1em;
         background-color: #efe;
       }
       .close {
@@ -41,12 +45,24 @@
         color: inherit;
         text-decoration: none;
       }
+      .url {
+        display: flex;
+        align-items: center;
+      }
+      .url input {
+        flex: auto;
+        min-width: 0;
+      }
+      .url a {
+        flex: 0 0 2em;
+        text-align: center;
+      }
       #progress {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
       }
       #bar {
-        display: block;
         flex: auto;
         position: relative;
         border: solid 1pt black;
@@ -150,7 +166,7 @@
           <p>
             The file will be available through the URL
           </p>
-          <p>
+          <p class="url">
             <input type="text" name="url" id="url0" value="${url}" size="60"
               readonly="readonly" />
             <script>
@@ -176,7 +192,7 @@
                   The file is available for a single download through the following URL
                   until you close the window.
                 </p>
-                <p>
+                <p class="url">
                   <input type="text" name="url" id="url1" value="${url}" size="60"
                     readonly="readonly" />
                   <a href="javascript:copy('url1');" title="Copy to clipboard">📋</a>
