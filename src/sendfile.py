@@ -239,6 +239,23 @@ class PositionStream:
         self.position += len(data)
         return data
 
+def get_query_param(query, key):
+    try:
+        value, = query[key]
+    except (ValueError, KeyError):
+        value = None
+    return value
+
+def build_query(**args):
+    query = ""
+    for key, value in args.items():
+        if query == "":
+            query = "?"
+        else:
+            query += "&"
+        query += urllib.parse.quote(key) + "=" + urllib.parse.quote(value)
+    return query
+
 class HTTPMethod:
     GET = 0
     POST = 1
@@ -272,10 +289,7 @@ def make_request_handler_class(config):
             try:
                 if len(parts) < 3:
                     query = urllib.parse.parse_qs(parse.query)
-                    try:
-                        ticket, = query["ticket"]
-                    except (ValueError, KeyError):
-                        ticket = None
+                    ticket = get_query_param(query, "ticket")
                     if method == HTTPMethod.POST:
                         self.receive_form_post(ticket)
                     else:
@@ -292,23 +306,22 @@ def make_request_handler_class(config):
                 self.wfile.write("Invalid request".encode("utf-8"))
 
         def show_form(self, parse, query, ticket):
-            quoted_base_url = urllib.parse.quote(base_url)
-            if ticket:
-                r = requests.get(cas + f"/serviceValidate?ticket={ticket}&service={quoted_base_url}")
-                if r.status_code != 200 or "<cas:authenticationSuccess>" not in r.text:
-                    raise Failure("Invalid ticket")
+            message = get_query_param(query, "message")
+            if self.require_ticket(ticket, message):
                 self.send_response(200)
                 self.send_header("Content-type", "text/html; encoding=utf-8")
                 self.end_headers()
-                messages = query.get("message", [])
-                if len(messages) > 0:
-                    message = " ".join(messages)
-                else:
-                    message = None
-                    self.wfile.write(index(base_url, message).encode("utf-8"))
-            else:
-                self.send_redirect(
-                    cas + "/login?service=" + quoted_base_url)
+                self.wfile.write(index(base_url, message).encode("utf-8"))
+
+        def require_ticket(self, ticket, message):
+            service = base_url
+            if message:
+                service += build_query(message=message)
+            if ticket:
+                r = requests.get(cas + "/serviceValidate" + build_query(ticket=ticket, service=service))
+                if r.status_code == 200 and "<cas:authenticationSuccess>" in r.text:
+                    return True
+            self.send_redirect(cas + "/login" + build_query(service=service))
 
         def receive_form_post(self, ticket):
             content_type, options = parse_options_header(self.headers["Content-Type"])
@@ -374,7 +387,7 @@ def make_request_handler_class(config):
             finally:
                 os.remove(infos_filename)
             message = f"File {filename} sent to {client_address}."
-            self.send_redirect(f"?message={message}&ticket={ticket}")
+            self.send_redirect(build_query(message=message, ticket=ticket))
 
         def receive_file(self, uuid):
             check_legal_uuid(uuid)
