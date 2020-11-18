@@ -108,7 +108,7 @@
                   }
               });
               xhr.addEventListener("load", function(e) {
-                  location.assign(xhr.responseURL);
+                  location.assign(xhr.responseURL.replace("&without_ticket=yes", ""));
               });
               function reset_reload() {
                   parent.querySelector("form").addEventListener("reset", function (e) {
