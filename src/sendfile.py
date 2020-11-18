@@ -16,7 +16,8 @@ import yaml
 import genshi.template
 import shortuuid
 
-BUFFER_SIZE = 4096
+BUFFER_SIZE = 0x1000
+CONSTANT_OVERHEAD = 60
 
 def read_yaml_file(filename):
     with open(filename, "r") as yaml_file:
@@ -30,6 +31,9 @@ def get_socket_filename(uuid):
 
 def get_infos_filename(uuid):
     return "infos/" + uuid
+
+def get_url(base_url, uuid):
+    return f"{base_url}/{uuid}/"
 
 def check_legal_uuid(uuid):
     try:
@@ -66,7 +70,7 @@ def generate_index(
 def index(base_url, message: typing.Optional[str] = None) -> str:
     uuid = shortuuid.uuid()
     secret = shortuuid.uuid()
-    url = f"{base_url}/{uuid}/"
+    url = get_url(base_url, uuid)
     with open(get_prepare_filename(uuid), "w") as file:
         file.write(secret)
     return generate_index(uuid, secret, url, message)
@@ -210,6 +214,7 @@ class IterValue:
             yield current_data
         self.parts.source.read(len(separator))
         end_mark = self.parts.source.read(2)
+        self.parts
         if end_mark == b"--":
             self.parts.terminated = True
         elif end_mark != b"\r\n":
@@ -219,11 +224,23 @@ class NotFound(Failure):
     def __init__(self):
         super().__init__("Not found", error_code=404)
 
+class PositionStream:
+    def __init__(self, stream):
+        self.stream = stream
+        self.position = 0
+
+    def peek(self, *args):
+        return self.stream.peek(*args)
+
+    def read(self, *args):
+        data = self.stream.read(*args)
+        self.position += len(data)
+        return data
+
 def make_request_handler_class(config):
     base_path = config["base_path"]
     base_domain = config["base_domain"]
     base_url = base_domain + base_path
-    query_path = re.compile(f"{base_url}/([0-9A-Za-z]+)/")
     redirect = config["redirect"]
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -264,14 +281,24 @@ def make_request_handler_class(config):
             """Respond to a POST request."""
             try:
                 content_type, options = parse_options_header(self.headers["Content-Type"])
-                parts = IterParts(self.rfile, options["boundary"])
+                content_length = int(self.headers["Content-Length"])
+                stream = PositionStream(self.rfile)
+                boundary = options["boundary"]
+                parts = IterParts(stream, boundary)
                 params = {}
                 for headers, iter_value in parts:
                     content_disposition, options = headers["content-disposition"]
                     name = options["name"]
                     if name == "file":
+                        filename = options["filename"]
+                        uuid = params["uuid"]
+                        secret = params["secret"]
+                        estimated_size = (
+                            content_length - stream.position -
+                            len(get_url(base_url, uuid)) - 2 * len(boundary) -
+                            CONSTANT_OVERHEAD)
                         self.send_file(
-                            iter_value, options["filename"], params["uuid"], params["secret"])
+                            iter_value, filename, estimated_size, uuid, secret)
                     elif name in ["uuid", "secret"]:
                         value = b""
                         for content in iter_value:
@@ -289,7 +316,7 @@ def make_request_handler_class(config):
                 self.end_headers()
                 self.wfile.write("Invalid request".encode("utf-8"))
 
-        def send_file(self, iter_value, filename, uuid, secret):
+        def send_file(self, iter_value, filename, size, uuid, secret):
             check_legal_uuid(uuid)
             prepare_filename = get_prepare_filename(uuid)
             with open(prepare_filename, "r") as prepare_file:
@@ -297,7 +324,7 @@ def make_request_handler_class(config):
             if secret != real_secret:
                 raise Failure("Invalid secret")
             os.remove(prepare_filename)
-            infos = { 'filename': filename }
+            infos = { 'filename': filename, 'size': size }
             infos_filename = get_infos_filename(uuid)
             with open(infos_filename, "w") as infos_file:
                 yaml.dump(infos, infos_file)
@@ -341,6 +368,7 @@ def make_request_handler_class(config):
                 self.send_header(
                     "Content-Disposition",
                     f"attachment; filename=\"{infos['filename']}\"")
+                self.send_header("Content-Length", infos["size"])
                 self.end_headers()
                 while 1:
                     data = sock.recv(BUFFER_SIZE)
