@@ -289,11 +289,13 @@ def make_request_handler_class(config):
             try:
                 if len(parts) < 3:
                     query = urllib.parse.parse_qs(parse.query)
-                    ticket = get_query_param(query, "ticket")
+                    without_ticket = get_query_param(query, "without_ticket") == "yes"
                     if method == HTTPMethod.POST:
-                        self.receive_form_post(ticket)
+                        self.receive_form_post(without_ticket)
+                    elif without_ticket:
+                        self.send_success("OK!")
                     else:
-                        self.show_form(parse, query, ticket)
+                        self.show_form(parse, query)
                 elif len(parts) < 5:
                     self.receive_file(parts[2])
                 else:
@@ -305,13 +307,17 @@ def make_request_handler_class(config):
                 self.end_headers()
                 self.wfile.write("Invalid request".encode("utf-8"))
 
-        def show_form(self, parse, query, ticket):
+        def show_form(self, parse, query):
+            ticket = get_query_param(query, "ticket")
             message = get_query_param(query, "message")
             if self.require_ticket(ticket, message):
-                self.send_response(200)
-                self.send_header("Content-type", "text/html; encoding=utf-8")
-                self.end_headers()
-                self.wfile.write(index(base_url, message).encode("utf-8"))
+                self.send_success(index(base_url, message))
+
+        def send_success(self, string):
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; encoding=utf-8")
+            self.end_headers()
+            self.wfile.write(string.encode("utf-8"))
 
         def require_ticket(self, ticket, message):
             service = base_url
@@ -323,7 +329,7 @@ def make_request_handler_class(config):
                     return True
             self.send_redirect(cas + "/login" + build_query(service=service))
 
-        def receive_form_post(self, ticket):
+        def receive_form_post(self, without_ticket):
             content_type, options = parse_options_header(self.headers["Content-Type"])
             content_length = int(self.headers["Content-Length"])
             stream = PositionStream(self.rfile)
@@ -343,7 +349,7 @@ def make_request_handler_class(config):
                         CONSTANT_OVERHEAD)
                     self.send_file(
                         iter_value, filename, estimated_size, uuid, secret,
-                        ticket)
+                        without_ticket)
                 elif name in ["uuid", "secret"]:
                     value = b""
                     for content in iter_value:
@@ -355,7 +361,7 @@ def make_request_handler_class(config):
                 else:
                     raise Failure("Unexpected option " + name)
 
-        def send_file(self, iter_value, filename, size, uuid, secret, ticket):
+        def send_file(self, iter_value, filename, size, uuid, secret, without_ticket):
             check_legal_uuid(uuid)
             prepare_filename = get_prepare_filename(uuid)
             with open(prepare_filename, "r") as prepare_file:
@@ -387,7 +393,9 @@ def make_request_handler_class(config):
             finally:
                 os.remove(infos_filename)
             message = f"File {filename} sent to {client_address}."
-            self.send_redirect(build_query(message=message, ticket=ticket))
+            if without_ticket:
+                args["without_ticket"] = "yes"
+            self.send_redirect(build_query(message=message, **args))
 
         def receive_file(self, uuid):
             check_legal_uuid(uuid)

@@ -121,12 +121,12 @@
               };
               reset_reload();
               xhr.upload.addEventListener("error", function(e) {
-                  parent.removeChild(pending);
+                  parent.removeChild(sending);
                   let failure = document.getElementById("failure").content.cloneNode(true);
                   parent.appendChild(failure);
                   reset_reload();
               });
-              xhr.open("POST", "");
+              xhr.open("POST", "?without_ticket=yes");
               xhr.send(new FormData(post_form));
               return false;
           })
