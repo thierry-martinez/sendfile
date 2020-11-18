@@ -71,7 +71,9 @@
       }
       function close_message() {
           elt = document.getElementById("message")
-          elt.parentNode.removeChild(elt)
+          if (elt) {
+              elt.parentNode.removeChild(elt)
+          }
       }
       function initialize_post_form() {
           post_form = document.getElementById("post_form")
