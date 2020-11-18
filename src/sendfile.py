@@ -393,6 +393,7 @@ def make_request_handler_class(config):
             finally:
                 os.remove(infos_filename)
             message = f"File {filename} sent to {client_address}."
+            args = {}
             if without_ticket:
                 args["without_ticket"] = "yes"
             self.send_redirect(build_query(message=message, **args))
