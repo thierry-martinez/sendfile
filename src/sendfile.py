@@ -3,6 +3,7 @@
 """sendfile implementation
 Thierry.Martinez@inria.fr, 2020"""
 
+import enum
 import http.server
 import os
 import pathlib
@@ -14,6 +15,7 @@ import urllib.parse
 import yaml
 
 import genshi.template
+import requests
 import shortuuid
 
 BUFFER_SIZE = 0x1000
@@ -237,35 +239,44 @@ class PositionStream:
         self.position += len(data)
         return data
 
+class HTTPMethod:
+    GET = 0
+    POST = 1
+
 def make_request_handler_class(config):
     base_path = config["base_path"]
     base_domain = config["base_domain"]
     base_url = base_domain + base_path
     redirect = config["redirect"]
+    cas = config["cas"]
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             """Respond to a GET request."""
+            self.do_request(HTTPMethod.GET)
+
+        def do_POST(self):
+            """Respond to a POST request."""
+            self.do_request(HTTPMethod.POST)
+
+        def do_request(self, method):
+            """Respond to a request."""
             parse = urllib.parse.urlparse(self.path)
             path = pathlib.PurePosixPath(parse.path)
             if "".join(path.parts[0:2]) == base_path:
-                self.handle_get_query(parse, path.parts)
+                self.do_sendfile_request(method, parse, path.parts)
             else:
                 self.send_redirect(redirect + self.path)
 
-        def handle_get_query(self, parse, parts):
-            query = urllib.parse.parse_qs(parse.query)
+        def do_sendfile_request(self, method, parse, parts):
+            """Respond to a request in /sendfile."""
             try:
-                print(parts)
                 if len(parts) < 3:
-                    self.send_response(200)
-                    self.send_header("Content-type", "text/html; encoding=utf-8")
-                    self.end_headers()
-                    messages = query.get("message", [])
-                    if len(messages) > 0:
-                        message = " ".join(messages)
+                    query = urllib.parse.parse_qs(parse.query)
+                    ticket = query.get("ticket", None)
+                    if method == HTTPMethod.POST:
+                        self.receive_form_post(ticket)
                     else:
-                        message = None
-                    self.wfile.write(index(base_url, message).encode("utf-8"))
+                        self.show_form(parse, query, ticket)
                 elif len(parts) < 5:
                     self.receive_file(parts[2])
                 else:
@@ -277,46 +288,58 @@ def make_request_handler_class(config):
                 self.end_headers()
                 self.wfile.write("Invalid request".encode("utf-8"))
 
-        def do_POST(self):
-            """Respond to a POST request."""
-            try:
-                content_type, options = parse_options_header(self.headers["Content-Type"])
-                content_length = int(self.headers["Content-Length"])
-                stream = PositionStream(self.rfile)
-                boundary = options["boundary"]
-                parts = IterParts(stream, boundary)
-                params = {}
-                for headers, iter_value in parts:
-                    content_disposition, options = headers["content-disposition"]
-                    name = options["name"]
-                    if name == "file":
-                        filename = options["filename"]
-                        uuid = params["uuid"]
-                        secret = params["secret"]
-                        estimated_size = (
-                            content_length - stream.position -
-                            len(get_url(base_url, uuid)) - 2 * len(boundary) -
-                            CONSTANT_OVERHEAD)
-                        self.send_file(
-                            iter_value, filename, estimated_size, uuid, secret)
-                    elif name in ["uuid", "secret"]:
-                        value = b""
-                        for content in iter_value:
-                            value += content
-                        params[name] = value.decode("utf-8")
-                    elif name == "url":
-                        for content in iter_value:
-                            pass
-                    else:
-                        raise Failure("Unexpected option " + name)
-            except Failure as exc:
-                print(exc)
-                self.send_response(exc.error_code)
+        def show_form(self, parse, query, ticket):
+            quoted_base_url = urllib.parse.quote(base_url)
+            if ticket:
+                r = requests.get(cas + f"/serviceValidate?ticket={ticket}&service={quoted_base_url}")
+                if r.status_code != 200 or "<cas:authenticationSuccess>" not in r.text:
+                    raise Failure("Invalid ticket")
+                self.send_response(200)
                 self.send_header("Content-type", "text/html; encoding=utf-8")
                 self.end_headers()
-                self.wfile.write("Invalid request".encode("utf-8"))
+                messages = query.get("message", [])
+                if len(messages) > 0:
+                    message = " ".join(messages)
+                else:
+                    message = None
+                    self.wfile.write(index(base_url, message).encode("utf-8"))
+            else:
+                self.send_redirect(
+                    cas + "/login?service=" + quoted_base_url)
 
-        def send_file(self, iter_value, filename, size, uuid, secret):
+        def receive_form_post(self, ticket):
+            content_type, options = parse_options_header(self.headers["Content-Type"])
+            content_length = int(self.headers["Content-Length"])
+            stream = PositionStream(self.rfile)
+            boundary = options["boundary"]
+            parts = IterParts(stream, boundary)
+            params = {}
+            for headers, iter_value in parts:
+                content_disposition, options = headers["content-disposition"]
+                name = options["name"]
+                if name == "file":
+                    filename = options["filename"]
+                    uuid = params["uuid"]
+                    secret = params["secret"]
+                    estimated_size = (
+                        content_length - stream.position -
+                        len(get_url(base_url, uuid)) - 2 * len(boundary) -
+                        CONSTANT_OVERHEAD)
+                    self.send_file(
+                        iter_value, filename, estimated_size, uuid, secret,
+                        ticket)
+                elif name in ["uuid", "secret"]:
+                    value = b""
+                    for content in iter_value:
+                        value += content
+                    params[name] = value.decode("utf-8")
+                elif name == "url":
+                    for content in iter_value:
+                        pass
+                else:
+                    raise Failure("Unexpected option " + name)
+
+        def send_file(self, iter_value, filename, size, uuid, secret, ticket):
             check_legal_uuid(uuid)
             prepare_filename = get_prepare_filename(uuid)
             with open(prepare_filename, "r") as prepare_file:
@@ -348,7 +371,7 @@ def make_request_handler_class(config):
             finally:
                 os.remove(infos_filename)
             message = f"File {filename} sent to {client_address}."
-            self.send_redirect(f"?message={message}")
+            self.send_redirect(f"?message={message}&ticket={ticket}")
 
         def receive_file(self, uuid):
             check_legal_uuid(uuid)
