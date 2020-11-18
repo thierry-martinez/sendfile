@@ -272,7 +272,10 @@ def make_request_handler_class(config):
             try:
                 if len(parts) < 3:
                     query = urllib.parse.parse_qs(parse.query)
-                    ticket = query.get("ticket", None)
+                    try:
+                        ticket, = query["ticket"]
+                    except (ValueError, KeyError):
+                        ticket = None
                     if method == HTTPMethod.POST:
                         self.receive_form_post(ticket)
                     else:
