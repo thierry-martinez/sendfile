@@ -120,6 +120,7 @@
                   percent_text = document.createTextNode(percent + "%");
                   percent_elt.appendChild(percent_text);
                   percent_bar_elt.style.width = percent + "%";
+                  document.title = percent + "% - Send file";
               }
               let xhr = new window.XMLHttpRequest();
               xhr.upload.addEventListener("progress", function(e) {
