@@ -342,7 +342,6 @@ def make_request_handler_class(config):
             boundary = options["boundary"]
             parts = IterParts(stream, boundary)
             params = {}
-            error = None
             for headers, iter_value in parts:
                 content_disposition, options = headers["content-disposition"]
                 name = options["name"]
@@ -359,9 +358,7 @@ def make_request_handler_class(config):
                             iter_value, filename, estimated_size, uuid, secret,
                             without_ticket)
                     except (BrokenPipeError, ConnectionResetError):
-                        for content in iter_value:
-                            pass
-                        error = "Broken pipe"
+                        raise Failure("Broken pipe")
                 elif name in ["uuid", "secret"]:
                     value = b""
                     for content in iter_value:
@@ -371,9 +368,7 @@ def make_request_handler_class(config):
                     for content in iter_value:
                         pass
                 else:
-                    error = "Unexpected option " + name
-            if error:
-                raise Failure(error)
+                    raise Failure("Unexpected option ")
 
         def send_file(self, iter_value, filename, size, uuid, secret, without_ticket):
             check_legal_uuid(uuid)
