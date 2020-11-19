@@ -303,9 +303,7 @@ def make_request_handler_class(config):
             except Failure as exc:
                 print(exc)
                 self.send_response(exc.error_code)
-                self.send_header("Content-type", "text/html; encoding=utf-8")
-                self.end_headers()
-                self.wfile.write("Invalid request".encode("utf-8"))
+                self.send_message("Invalid request")
 
         def show_form(self, parse, query):
             ticket = get_query_param(query, "ticket")
@@ -315,6 +313,12 @@ def make_request_handler_class(config):
 
         def send_success(self, string):
             self.send_response(200)
+            self.send_html(string)
+
+        def send_message(self, string):
+            self.send_html(f"<html><head><stitle>{string}</title></head><body><h1>{string}</h1></body></html>")
+
+        def send_html(self, string):
             self.send_header("Content-type", "text/html; encoding=utf-8")
             self.end_headers()
             self.wfile.write(string.encode("utf-8"))
@@ -338,6 +342,7 @@ def make_request_handler_class(config):
             boundary = options["boundary"]
             parts = IterParts(stream, boundary)
             params = {}
+            error = None
             for headers, iter_value in parts:
                 content_disposition, options = headers["content-disposition"]
                 name = options["name"]
@@ -349,9 +354,14 @@ def make_request_handler_class(config):
                         content_length - stream.position -
                         len(get_url(base_url, uuid)) - 2 * len(boundary) -
                         CONSTANT_OVERHEAD)
-                    self.send_file(
-                        iter_value, filename, estimated_size, uuid, secret,
-                        without_ticket)
+                    try:
+                        self.send_file(
+                            iter_value, filename, estimated_size, uuid, secret,
+                            without_ticket)
+                    except (BrokenPipeError, ConnectionResetError):
+                        for content in iter_value:
+                            pass
+                        error = "Broken pipe"
                 elif name in ["uuid", "secret"]:
                     value = b""
                     for content in iter_value:
@@ -361,7 +371,9 @@ def make_request_handler_class(config):
                     for content in iter_value:
                         pass
                 else:
-                    raise Failure("Unexpected option " + name)
+                    error = "Unexpected option " + name
+            if error:
+                raise Failure(error)
 
         def send_file(self, iter_value, filename, size, uuid, secret, without_ticket):
             check_legal_uuid(uuid)
@@ -429,7 +441,7 @@ def make_request_handler_class(config):
         def send_redirect(self, location):
             self.send_response(303)
             self.send_header('Location', location)
-            self.end_headers()
+            self.send_message("Redirected to " + location)
 
     return RequestHandler
 
