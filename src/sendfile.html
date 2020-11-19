@@ -105,7 +105,7 @@
               close_message();
               parent = post_form.parentNode;
               parent.removeChild(post_form);
-              let sending = document.getElementById("sending").content.cloneNode(true);
+              let sending = document.getElementById("sending").content.cloneNode(true).querySelector("form");
               parent.appendChild(sending);
               let progress_elt = document.getElementById("progress");
               progress_elt.style.visibility = "hidden";
@@ -144,7 +144,7 @@
               reset_reload();
               xhr.upload.addEventListener("error", function(e) {
                   parent.removeChild(sending);
-                  let failure = document.getElementById("failure").content.cloneNode(true);
+                  let failure = document.getElementById("failure").content.cloneNode(true).querySelector("form");
                   parent.appendChild(failure);
                   reset_reload();
               });
