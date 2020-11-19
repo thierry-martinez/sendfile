@@ -146,6 +146,7 @@
                   parent.removeChild(sending);
                   let failure = document.getElementById("failure").content.cloneNode(true).querySelector("form");
                   parent.appendChild(failure);
+                  document.title = "Download failed";
                   reset_reload();
               });
               xhr.open("POST", "?without_ticket=yes");
@@ -216,7 +217,7 @@
             <form action="">
               <label>
                 <p>
-                  The download failed.
+                  The download has failed.
                 </p>
               </label>
               <p class="button"><input type="reset" value="Try again" /></p>
