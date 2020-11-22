@@ -264,7 +264,7 @@ def make_request_handler_class(config):
     base_path = config["base_path"]
     base_domain = config["base_domain"]
     base_url = base_domain + base_path
-    redirect = config["redirect"]
+    redirect = config.get("redirect", None)
     cas = config.get("cas", None)
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -281,8 +281,10 @@ def make_request_handler_class(config):
             path = pathlib.PurePosixPath(parse.path)
             if "".join(path.parts[0:2]) == base_path:
                 self.do_sendfile_request(method, parse, path.parts)
-            else:
+            elif redirect is not None:
                 self.send_redirect(redirect + self.path)
+            else:
+                raise NotFound()
 
         def do_sendfile_request(self, method, parse, parts):
             """Respond to a request in /sendfile."""
