@@ -259,6 +259,7 @@ def build_query(**args):
 class HTTPMethod:
     GET = 0
     POST = 1
+    HEAD = 2
 
 def make_request_handler_class(config):
     base_path = config["base_path"]
@@ -274,6 +275,10 @@ def make_request_handler_class(config):
         def do_POST(self):
             """Respond to a POST request."""
             self.do_request(HTTPMethod.POST)
+
+        def do_HEAD(self):
+            """Respond to a HEAD request."""
+            self.do_request(HTTPMethod.HEAD)
 
         def do_request(self, method):
             """Respond to a request."""
@@ -299,7 +304,7 @@ def make_request_handler_class(config):
                     else:
                         self.show_form(parse, query)
                 elif len(parts) < 5:
-                    self.receive_file(parts[2])
+                    self.receive_file(parts[2], method)
                 else:
                     raise NotFound()
             except Failure as exc:
@@ -409,7 +414,7 @@ def make_request_handler_class(config):
                 args["without_ticket"] = "yes"
             self.send_redirect(build_query(message=message, **args))
 
-        def receive_file(self, uuid):
+        def receive_file_header(self, uuid):
             check_legal_uuid(uuid)
             infos_filename = get_infos_filename(uuid)
             try:
@@ -417,18 +422,23 @@ def make_request_handler_class(config):
                     infos = yaml.load(infos_file, Loader=yaml.FullLoader)
             except FileNotFoundError:
                 raise NotFound()
+            self.send_response(200)
+            self.send_header(
+                "Content-Disposition",
+                f"attachment; filename=\"{infos['filename']}\"")
+            self.send_header("Content-Length", infos["size"])
+            self.end_headers()
+
+        def receive_file(self, uuid, method):
+            self.receive_file_header(uuid)
+            if method == HTTPMethod.HEAD:
+                return
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 try:
                     sock.connect(get_socket_filename(uuid))
                 except socket.error:
                     raise Failure("Socket error")
                 sock.sendall((self.client_address[0] + "\n").encode('utf-8'))
-                self.send_response(200)
-                self.send_header(
-                    "Content-Disposition",
-                    f"attachment; filename=\"{infos['filename']}\"")
-                self.send_header("Content-Length", infos["size"])
-                self.end_headers()
                 while 1:
                     data = sock.recv(BUFFER_SIZE)
                     if not data:
